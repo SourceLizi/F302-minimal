@@ -1,0 +1,7 @@
+(sym_lib_table
+  (lib (name ina180)(type Legacy)(uri ${KIPRJMOD}/ina180.lib)(options "")(descr ""))
+  (lib (name XLSEMI)(type Legacy)(uri ${KIPRJMOD}/XLSEMI.lib)(options "")(descr ""))
+  (lib (name TC6291C)(type Legacy)(uri ${KIPRJMOD}/TC6291C.lib)(options "")(descr ""))
+  (lib (name ts5a3357)(type Legacy)(uri ${KIPRJMOD}/ts5a3357.lib)(options "")(descr ""))
+  (lib (name MT3540)(type Legacy)(uri ${KIPRJMOD}/MT3540.lib)(options "")(descr ""))
+)

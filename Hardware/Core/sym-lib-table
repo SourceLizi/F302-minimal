@@ -1,0 +1,5 @@
+(sym_lib_table
+  (lib (name LDLN030G33R)(type Legacy)(uri ${KIPRJMOD}/LDLN030G33R.lib)(options "")(descr ""))
+  (lib (name LSM6DS33TR)(type Legacy)(uri ${KIPRJMOD}/LSM6DS33TR.lib)(options "")(descr ""))
+  (lib (name QMI8658C)(type Legacy)(uri ${KIPRJMOD}/QMI8658C.lib)(options "")(descr ""))
+)
