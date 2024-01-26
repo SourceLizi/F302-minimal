@@ -5,7 +5,7 @@
   ******************************************************************************
   * @attention
   *
-  *  Copyright (c) 2022-2023 Lizi <lizi_bussiness[AT]outlook.com>
+  *  Copyright (c) 2022-2024 Lizi <lizi_bussiness[AT]outlook.com>
   *  
   *  Permission is hereby granted, free of charge, to any person obtaining a copy
   *  of this software and associated documentation files (the "Software"), to deal
@@ -25,6 +25,9 @@
   *  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   *  SOFTWARE.
   ******************************************************************************
+  Date        Author        Notes
+  2023/05/05 SourceLizi  Initial release
+  2024/01/26 SourceLizi  Fix the error in updating covariance matrix
   */
 #include "imu_ekf.h"
 
@@ -48,6 +51,8 @@ static float F32_K[Q_SIZE*VEC_SIZE];
 static float F32_R[VEC_SIZE*VEC_SIZE];
 static float F32_Q[Q_SIZE*Q_SIZE];
 
+static float F32_J[Q_SIZE*Q_SIZE];
+
 static float F32_TMP1[Q_SIZE*Q_SIZE];
 static float F32_TMP2[Q_SIZE*Q_SIZE];
 
@@ -64,6 +69,8 @@ arm_matrix_instance_f32 K = {Q_SIZE,VEC_SIZE,F32_K};
 arm_matrix_instance_f32 R = {VEC_SIZE,VEC_SIZE,F32_R};
 arm_matrix_instance_f32 Q = {Q_SIZE,Q_SIZE,F32_Q};
 
+arm_matrix_instance_f32 J = {Q_SIZE,Q_SIZE,F32_J};
+
 arm_matrix_instance_f32 tmp1 = {Q_SIZE,Q_SIZE,F32_TMP1};
 arm_matrix_instance_f32 tmp2 = {Q_SIZE,Q_SIZE,F32_TMP2};
 
@@ -71,6 +78,9 @@ arm_status result;
 
 float sigma_r = 1e-5;
 float sigma_q = 0.045f;
+
+static float quat2[Q_SIZE*1];
+static float quat_norm2;
 
 void imu_ekf_init(void){
 	memset(F32_A,Q_SIZE*Q_SIZE*sizeof(float),0);
@@ -163,9 +173,10 @@ void imu_ekf_update(imu_data_f32_t* _imu, float dt){
 		
 		result = arm_mat_mult_f32(&K, &H, &Pk);
 		result = arm_mat_scale_f32(&Pk, -1.0f, &Pk);
-		F32_TMP1[Q_SIZE*0+0] += 1;
-		F32_TMP1[Q_SIZE*1+1] += 1;
-		F32_TMP1[Q_SIZE*2+2] += 1;
+		F32_Pk[Q_SIZE*0+0] += 1;
+		F32_Pk[Q_SIZE*1+1] += 1;
+		F32_Pk[Q_SIZE*2+2] += 1;
+		F32_Pk[Q_SIZE*2+3] += 1;
 		//2. tmp1 = Pk*Pk_pri = (I-KH)*Pk_pri, tmp2 = Pk^T = (I-KH)^T
 		result = arm_mat_mult_f32(&Pk, &Pk_pri, &tmp1);
 		result = arm_mat_trans_f32(&Pk, &tmp2);
@@ -202,8 +213,41 @@ void imu_ekf_update(imu_data_f32_t* _imu, float dt){
 
 	//normalize quaternion
 	//q_norm = sqrtf(F32_Xk[0]*F32_Xk[0] + F32_Xk[1]*F32_Xk[1] + F32_Xk[2]*F32_Xk[2] + F32_Xk[3]*F32_Xk[3]);
-	arm_sqrt_f32(F32_Xk[0]*F32_Xk[0] + F32_Xk[1]*F32_Xk[1] + F32_Xk[2]*F32_Xk[2] + F32_Xk[3]*F32_Xk[3], &q_norm);
-	if(q_norm > 0.0f){
+	quat2[0] = F32_Xk[0]*F32_Xk[0];
+	quat2[1] = F32_Xk[1]*F32_Xk[1];
+	quat2[2] = F32_Xk[2]*F32_Xk[2];
+	quat2[3] = F32_Xk[3]*F32_Xk[3];
+	quat_norm2 = quat2[0] + quat2[1] + quat2[2] + quat2[3];
+	arm_sqrt_f32(quat_norm2, &q_norm);
+	
+	if(quat_norm2 > 0.0f){
+		//proc: Pk|corr=J*Pk*J^T
+		//1.get jacobian matrix J:
+		F32_J[Q_SIZE*0+0] = quat_norm2-quat2[0], F32_J[Q_SIZE*0+1] = -F32_Xk[0]*F32_Xk[1]
+			, F32_J[Q_SIZE*0+2] = F32_Xk[0]*F32_Xk[2],F32_J[Q_SIZE*0+3] = F32_Xk[0]*F32_Xk[3];
+
+		F32_J[Q_SIZE*1+0] = -F32_Xk[1]*F32_Xk[0], F32_J[Q_SIZE*1+1] = quat_norm2-quat2[1]
+			, F32_J[Q_SIZE*1+2] = -F32_Xk[1]*F32_Xk[2], F32_J[Q_SIZE*1+3] = -F32_Xk[1]*F32_Xk[3];
+
+		F32_J[Q_SIZE*2+0] = -F32_Xk[2]*F32_Xk[0], F32_J[Q_SIZE*2+1] = -F32_Xk[2]*F32_Xk[1]
+			, F32_J[Q_SIZE*2+2] = quat_norm2-quat2[2], F32_J[Q_SIZE*2+3] = -F32_Xk[2]*F32_Xk[3];
+
+		F32_J[Q_SIZE*3+0] = -F32_Xk[3]*F32_Xk[0], F32_J[Q_SIZE*3+1] = -F32_Xk[3]*F32_Xk[1]
+			, F32_J[Q_SIZE*3+2] = -F32_Xk[3]*F32_Xk[2], F32_J[Q_SIZE*3+3] = quat_norm2-quat2[3];
+	
+		result = arm_mat_scale_f32(&J, 1/(quat_norm2*q_norm), &J);
+		
+		tmp1.numRows = Q_SIZE; tmp1.numCols = Q_SIZE;
+		tmp2.numRows = Q_SIZE; tmp2.numCols = Q_SIZE;
+		//2. tmp1 = J^T
+		result = arm_mat_trans_f32(&J, &tmp1);
+		//3. tmp2 = J*Pk
+		result = arm_mat_mult_f32(&J, &Pk, &tmp2);
+		//4. Pk|corr = J*Pk*J^T = tmp2*tmp1
+		result = arm_mat_mult_f32(&tmp2, &tmp1, &Pk);
+
+		//normalize quaternion
+		//q_norm = sqrtf(F32_Xk[0]*F32_Xk[0] + F32_Xk[1]*F32_Xk[1] + F32_Xk[2]*F32_Xk[2] + F32_Xk[3]*F32_Xk[3]);
 		F32_Xk[0] /= q_norm; F32_Xk[1] /= q_norm; F32_Xk[2] /= q_norm; F32_Xk[3] /= q_norm;
 	}else{
 		imu_ekf_init();

@@ -14,6 +14,9 @@
   * If no LICENSE file comes with this software, it is provided AS-IS.
   *
   ******************************************************************************
+  Date        Author        Notes
+  2023/05/05 SourceLizi  Initial release
+  2024/01/26 SourceLizi  Fix the bug that data was read when QMI8658C not ready, update imu gyro bias
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
@@ -22,7 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "imu_ekf.h"
+#include "imu_eskf.h"
 #include "usbd_cdc_if.h"
 /* USER CODE END Includes */
 
@@ -76,6 +79,8 @@ typedef __packed struct{
 
 uint32_t timetamp,last_timetamp = 0;
 uint32_t delta_t;
+
+uint8_t spi_byte;
 
 
 packet_t upload_packet;
@@ -252,7 +257,7 @@ int main(void)
 	spi_write_reg(0x03,0x22); //+-8g , 2khz
 	spi_write_reg(0x04, 0x72); //2048dps, 2khz
 	//spi_write_reg(0x06, 0x55);
-	imu_ekf_init();
+	imu_eskf_init();
 	upload_packet.header = 0xAAAA;
 	upload_packet.func = 0x01;
 	upload_packet.len = 12;
@@ -271,38 +276,43 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 		//spi_read_bytes(addr,&rx,1);
-		timetamp = TIM17->CNT;
-		for(int i=0;i<12;i++){
-				((uint8_t*)&imu_data)[i] = spi_read_reg(0x35+i);
-		}
-//		for(int i=0;i<3;i++){
-//				((uint8_t*)&timetamp)[i] = spi_read_reg(0x30+i);
-//		}
-		if(timetamp < last_timetamp){
-			delta_t = (65536 - last_timetamp) + timetamp;
-		}else{
-			delta_t = timetamp - last_timetamp;
-		}
-		last_timetamp = timetamp;
-		
-		imu_data_f32.ax = imu_data.acc[0] / 32768.0f * 8.0f;
-		imu_data_f32.ay = imu_data.acc[1] / 32768.0f * 8.0f;
-		imu_data_f32.az = imu_data.acc[2] / 32768.0f * 8.0f;
-		
-		imu_data_f32.gx = (imu_data.gyro[0] + 115) / 32768.0f * 2048 /180*IMU_PI ;
-		imu_data_f32.gy = imu_data.gyro[1] / 32768.0f * 2048/180*IMU_PI;
-		imu_data_f32.gz = imu_data.gyro[2] / 32768.0f * 2048/180*IMU_PI;
-		
-		imu_ekf_update(&imu_data_f32, ((float)delta_t)/1000000.0f);
-		imu_ekf_eular(&eular);
-		
-		if(upload_flag){
-			upload_flag = 0;
-			if(hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED){
-				ANO_DT_Send_Status(-eular.roll, eular.pitch, -eular.yaw, 0,0,0);
-				HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+		spi_byte = spi_read_reg(0x2E); //STATUS0
+		if((spi_byte & 0x03) == 0x03){
+				timetamp = TIM17->CNT;
+				for(int i=0;i<12;i++){
+						((uint8_t*)&imu_data)[i] = spi_read_reg(0x35+i);
+				}
+		//		for(int i=0;i<3;i++){
+		//				((uint8_t*)&timetamp)[i] = spi_read_reg(0x30+i);
+		//		}
+				if(timetamp < last_timetamp){
+					delta_t = (65536 - last_timetamp) + timetamp;
+				}else{
+					delta_t = timetamp - last_timetamp;
+				}
+				last_timetamp = timetamp;
+				
+				imu_data_f32.ax = imu_data.acc[0] / 32768.0f * 8.0f;
+				imu_data_f32.ay = imu_data.acc[1] / 32768.0f * 8.0f;
+				imu_data_f32.az = imu_data.acc[2] / 32768.0f * 8.0f;
+				
+				imu_data_f32.gx = (imu_data.gyro[0]+133) / 32768.0f * 2048 /180*IMU_PI ;
+				imu_data_f32.gy = (imu_data.gyro[1]+31) / 32768.0f * 2048/180*IMU_PI;
+				imu_data_f32.gz = (imu_data.gyro[2]+11) / 32768.0f * 2048/180*IMU_PI;
+				
+				imu_eskf_update(&imu_data_f32, ((float)delta_t)/1000000.0f);
+				imu_eskf_eular(&eular);
+				
+				if(upload_flag){
+					upload_flag = 0;
+					if(hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED){
+						ANO_DT_Send_Status(-eular.roll, eular.pitch, -eular.yaw, 0,0,0);
+						HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+					}else{
+						HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13,GPIO_PIN_SET);
+					}
+				}
 			}
-		}
 //		
 //		//spi_read_bytes(0x3B,(uint8_t*)gyro_data,6);
 //		

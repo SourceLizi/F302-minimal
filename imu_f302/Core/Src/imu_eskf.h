@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
-  * @file           : imu_ekf.h
-  * @brief          : Quaternion Based EKF
+  * @file           : imu_eskf.h
+  * @brief          : Quaternion Based error-state KF
   ******************************************************************************
   * @attention
   *
@@ -25,11 +25,11 @@
   *  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   *  SOFTWARE.
   ******************************************************************************
-    Date        Author        Notes
-  2023/05/05 SourceLizi  Initial release
+  Date        Author        Notes
+  2024/01/26 SourceLizi  Initial release
   */
-#ifndef _IMU_EKF_H
-#define _IMU_EKF_H
+#ifndef _IMU_ESKF_H
+#define _IMU_ESKF_H
 
 typedef struct{	
 	float gx; float gy; float gz;
@@ -43,9 +43,9 @@ typedef struct{
 	float yaw;
 }euler_t;
 
-void imu_ekf_init(void);
-void imu_ekf_update(imu_data_f32_t* _imu, float dt);
-void imu_ekf_eular(euler_t* euler);
+void imu_eskf_init(void);
+void imu_eskf_update(imu_data_f32_t* _imu, float dt);
+void imu_eskf_eular(euler_t* euler);
 
 #endif
 

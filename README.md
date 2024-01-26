@@ -21,4 +21,4 @@
 
 `f302_minimal_test` 内为早期测试核心板的代码，基本没有实际用途
 
-`imu_f302` 内为IMU测试解算代码，读取QMI8658C解算角度，并将其通过USB虚拟串口发送至匿名地面站上位机。解算算法详见[这篇博客](https://sourcelizi.github.io/202304/imu-practice/)
+`imu_f302` 内为IMU测试解算代码，读取QMI8658C解算角度，并将其通过USB虚拟串口发送至匿名地面站上位机。EKF解算算法详见[这篇博客](https://sourcelizi.github.io/202304/imu-practice/)，新增加的ESKF解算算法见[这篇博客](https://sourcelizi.github.io/202311/imu-practice3/)

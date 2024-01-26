@@ -1,0 +1,15 @@
+EESchema-DOCLIB  Version 2.0
+#
+$CMP EMI_Filter_CommonMode
+D EMI 2-inductor common mode filter
+K EMI common mode filter
+F ~
+$ENDCMP
+#
+$CMP EMI_Filter_LL
+D EMI 2-inductor filter
+K EMI filter
+F ~
+$ENDCMP
+#
+#End Doc Library
